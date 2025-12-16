@@ -1,5 +1,5 @@
 import { revcomp, resolveToSeq, isPalindromic, Polynucleotide, polynucleotide, resolveToPoly, plasmid, oligo, dsDNA } from './C6-Seq.js';
-import { runPCA } from './C6-PCA.js'; # PCA SIMULATOR EDIT - Spencer Riegler
+import { runPCA } from './C6-PCA.js'; // PCA SIMULATOR EDIT - Spencer Riegler
 
 // Helper to display a sequence with context for error messages
 function displaySeq(seq) {
@@ -181,7 +181,8 @@ function displaySeq(seq) {
  */
 function parseCF(...blobs) {
     const normalizeOperation = {
-        "pcr": "PCR",
+        "pca": "PCA", //PCA SIMULATOR EDIT - Spencer Riegler
+		"pcr": "PCR",
         "digest": "Digest",
         "ligate": "Ligate",
         "gibson": "Gibson",
@@ -234,7 +235,19 @@ function parseCF(...blobs) {
                 let step = { operation: normalizedOp };
 
                 switch (normalizedOp) {
-                    case "PCR":
+                    // BEGIN PCA SIMULATOR EDIT - Spencer Riegler
+					case "PCA":
+    					// Expected format:
+    					// PCA oligoStart-oligoEnd outputName
+    					if (tokens.length < 3) {
+        					throw new Error("PCA step requires at least 3 fields: PCA OligoRange Output");
+    					}
+    					step.oligoRange = tokens[1];   // e.g. ca1338-ca1343
+    					step.output = tokens[2];
+    					break;
+					// END PCA SIMULATOR EDIT - Spencer Riegler
+						
+					case "PCR":
                         // Check token count for PCR
                         if (tokens.length < 5) {
                             throw new Error("PCR step requires 5 fields: PCR ForwardPrimer ReversePrimer Template Output");
@@ -1087,11 +1100,62 @@ function simCF(cfData) {
       throw new Error(`Missing sequence for key: ${key}`);
   }
 
+// BEGIN PCA SIMULATOR EDIT - Spencer Riegler	
+function resolveOligoRange(range) {
+    const [start, end] = range.split('-');
+
+    let collecting = false;
+    const oligos = [];
+
+    for (const key of Object.keys(sequences)) {
+        if (key === start) collecting = true;
+        if (collecting) {
+            const seq = lookupSequence(key);
+            if (!seq || seq.isDoubleStranded) {
+                throw new Error(`PCA requires single-stranded oligos. "${key}" is not an oligo.`);
+            }
+            oligos.push({ name: key, sequence: seq.sequence });
+        }
+        if (key === end) break;
+    }
+
+    if (oligos.length === 0) {
+        throw new Error(`No oligos resolved for PCA range: ${range}`);
+    }
+
+    return oligos;
+}
+// END PCA SIMULATOR EDIT - Spencer Riegler
+	
     for (let i = 0; i < steps.length; i++) {
         const step = steps[i];
 
-        switch (step.operation) {
-            case 'PCR': {
+    	switch (step.operation) {
+            
+			// BEGIN PCA SIMULATOR EDIT - Spencer Riegler
+			case 'PCA': {
+    			const oligos = resolveOligoRange(step.oligoRange);
+				const result = runPCA(oligos);
+
+    			if (!result.products || result.products.length === 0) {
+        			throw new Error(`PCA failed: no assembly produced for ${step.oligoRange}`);
+    			}
+
+    			// Deterministically choose the best product
+    			const best = result.products[0];
+
+    			const productPoly = dsDNA(best.sequence);
+
+    			products.push({
+        			name: step.output,
+        			sequence: productPoly
+    			});
+
+    			break;
+			}
+			// END PCA SIMULATOR EDIT - Spencer Riegler
+			
+			case 'PCR': {
                 const forwardOligoSeq = lookupSequence(step.forward_oligo);
                 const reverseOligoSeq = lookupSequence(step.reverse_oligo);
                 const templateSeq = lookupSequence(step.template);
