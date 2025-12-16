@@ -1,4 +1,5 @@
 import { revcomp, resolveToSeq, isPalindromic, Polynucleotide, polynucleotide, resolveToPoly, plasmid, oligo, dsDNA } from './C6-Seq.js';
+import { runPCA } from './C6-PCA.js'; # PCA SIMULATOR EDIT - Spencer Riegler
 
 // Helper to display a sequence with context for error messages
 function displaySeq(seq) {
